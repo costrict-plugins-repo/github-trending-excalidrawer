@@ -1,0 +1,24 @@
+node_modules/
+examples/*.excalidraw
+examples/*.svg
+examples/*.png
+*.excalidraw
+*.svg
+*.png
+.npmrc
+
+# local agent/IDE skill installs (not part of the package)
+.agent/
+.agents/
+.claude/
+.kiro/
+.windsurf/
+skills-lock.json
+
+# README gallery images are committed (regenerate: node examples/gallery.mjs)
+!docs/gallery/*.png
+
+# idea-loop design archive scratch
+docs/design/tmp/
+# design archive assets are committed via LFS (the *.png rule above would hide them)
+!docs/design/prod/**/assets/*.png

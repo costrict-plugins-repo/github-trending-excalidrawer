@@ -1,0 +1,414 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+See [`docs/roadmap.md`](./docs/roadmap.md) for the forward-looking plan.
+
+## 0.5.15
+
+_engine 0.5.15 · plugin 0.0.6_
+
+### Fixed
+
+- **Arrowheads were oversized on bold arrows and skewed on short tails.** The
+  SVG/PNG renderer drew the head as an SVG `<marker>` that scaled with stroke
+  width (24px at the default width, 48px when bold) and aimed it from a point
+  only ~12px back on the curve. On thin curves that was within 1–2° of the
+  line and not visible; on a bold arrow the head was twice Excalidraw's size,
+  and when the last segment was short it could point up to ~40° off the
+  line. Arrowheads are now drawn as real geometry the way Excalidraw draws
+  them: a fixed 25px head with ±20° wings, sized down to half the last
+  segment, aimed along the chord from the tip to the point one head-length
+  back along the drawn curve.
+
+### Added
+
+- **Arrow and line components**, matching Excalidraw's two linear tools.
+  `arrow()` now takes `arrowType` (`sharp` / `round` / `elbow`), `startArrowhead`
+  / `endArrowhead` (all eight Excalidraw arrowheads: `arrow`, `bar`, `circle`,
+  `circle_outline`, `triangle`, `triangle_outline`, `diamond`,
+  `diamond_outline`), `strokeStyle` and `strokeWidth` (`thin` / `medium` /
+  `bold` or a number). The new `line()` builder emits Excalidraw `line`
+  elements with `strokeWidth` and `edges` (`sharp` / `round`). Sugar gets the
+  same: `arrowType`, `head`, `startHead`, `strokeStyle`, `strokeWidth` on
+  arrows, and a new `shape: "line"` with `edges`. Elbow arrows auto-insert
+  corners so every segment is axis-aligned. First step of the component
+  layer (#15); stack/pack primitives are still open there.
+- The SVG/PNG renderer now draws `line` elements (they were silently dropped)
+  and elbow arrows (rounded 16px corners, as in Excalidraw).
+
+### Changed
+
+- An arrow's `width` / `height` is now the bounding box of its points rather
+  than the offset of the last point.
+- **Skills: new visual-semantics layer.** `skills/shared/references/semantics.md`
+  sits between the type recipes and the sugar API and maps a meaning to a
+  component and its style: arrow vs line (directed or not), solid / dashed /
+  dotted (certain, async/return/optional/planned, inferred), stroke weight
+  (main path vs auxiliary), arrowheads, elbow vs round, and colors.
+  `colors.md` is merged into it. Rules: one style carries one meaning per
+  diagram, style is never decoration, add a legend for custom meanings, ask
+  in clarify when the user's description doesn't say. `sugar.md` is now a pure
+  API reference. Recipes keep only their exceptions (sequence: dashed means
+  *response*); read order is semantics → sugar → recipe.
+- Undirected connectors are `line`s everywhere: sequence lifelines, timeline
+  axis segments and connectors, tree connectors (recipes, templates, gallery).
+  `arrow` + `head: "none"` still renders but is no longer taught.
+- Auto-routed connectors between boxes use `arrowType: "elbow"` — flowchart,
+  architecture and comparison recipes, and the flowchart / architecture
+  templates. The default `round` smoothed their L / Z routes into S-bends.
+
+## 0.5.14
+
+_engine 0.5.14 · plugin 0.0.5_
+
+### Added
+
+- **New `tree` skill + template** — hierarchies that grow from one root:
+  taxonomies, org charts, user-story maps (root → scenario → story),
+  category → item breakdowns. Grows **left → right** (root on the left; the
+  right choice when leaves are sentences) or **top → down** (root on top; reads
+  like an org chart). Say *"draw this as a tree"* / *"画个树状图"*, or
+  `excalidrawer generate -t tree`. Closes #18.
+
+  Each parent sits at the midpoint of its own children, subtrees never overlap,
+  and connectors run only through the gap between levels, so no edge crosses a
+  box or another edge. The `flowchart` layout can't do this: it centers each
+  layer across the whole canvas, so a parent lands nowhere near its children.
+  Each first-level branch gets its own color and everything under it uses that
+  color's tint, so a group reads as one family without a legend. Optional
+  per-node `desc` subtitle, leaf numbering (`numberLeaves`), depth captions
+  (`levels`), and per-depth widths.
+
+  The skill always asks which way the tree should split — 上下 (root on top)
+  or 左右 (root on the left) — with a sketch of each option. It asks even when
+  the hierarchy is already pasted in, because the content alone can't decide
+  the shape. It recommends left → right when leaves are long sentences or
+  there are more than ~8 of them.
+
+- **`tree` layout helper** (`compute_layout` + library export `treeLayout`).
+  It returns node boxes plus the connector segments already in sugar L4 arrow
+  form, so the skill maps them straight to sugar without doing any geometry.
+
+- **`examples/tree-figures.mjs`** — the issue's eval case (a 23-story Chinese
+  user-story map, left → right) and a small taxonomy drawn both top → down and
+  left → right.
+
+- **README gallery.** A new *What it makes* section shows one rendered figure
+  per diagram type: flowchart, architecture, sequence, timeline, comparison,
+  and the tree in both directions plus a 23-story user-story map. The images live
+  in `docs/gallery/` and come from `examples/gallery.mjs`, so regenerating
+  them is a single command.
+
+### Changed
+
+- **Diagram labels are English unless the user asks otherwise — including
+  when the source is not.** The shared skill already defaulted labels to
+  English, but an agent handed a Chinese spec or outline tended to copy it
+  verbatim. Chatting in Chinese or pasting Chinese material no longer counts as
+  asking for Chinese labels: the content is translated, numbering and product
+  names are kept. Say "用中文" / "keep the original wording" to keep the source
+  language.
+
+### Fixed
+
+- **CJK text wrapping no longer starts a line with punctuation.** A wrapped
+  Chinese label could put a lone `，` or `。` at the start of a line (or a
+  whole line of just `。`). Closing punctuation now pulls the previous
+  character down with it (行首禁则). This applies to every diagram type.
+
+- **`excalidrawer generate` now renders CJK text.** The template path skipped
+  the system CJK font loading that `render` does, so Chinese, Japanese and
+  Korean labels came out as blank space in the SVG/PNG.
+
+## 0.5.13
+
+_engine 0.5.13 · plugin 0.0.4_
+
+### Added
+
+- **New `comparison` skill** — left-vs-right A/B diagrams: product vs product,
+  before/after, old vs new approach, option trade-offs. Three layouts are
+  covered (symmetric two-column with a `VS` badge, three-column with a center
+  dimension label, and asymmetric where one side splits into sub-cards), plus
+  the card grammar that makes a comparison read as a comparison — a solid
+  header card, a short arrow, and a dashed body panel per side.
+  Say *"compare A and B"* / *"画个对比图"* and the skill takes it from there.
+
+- **`equalize` layout helper** (`compute_layout` + library export). A box's
+  `h` is a floor, so the box whose label wraps grows alone and a row of
+  siblings ends up ragged. `equalize` measures the group and returns one
+  height that fits all of them — build every box at that height and the row
+  stays level while labels still wrap, center, and lint as usual. Works on
+  plain labelled boxes, `titledBox`-style header+body cards, and cells whose
+  height you already know:
+
+  ```js
+  compute_layout({ helper: "equalize", args: { cells: [
+    { w: 180, text: "Auth" },
+    { w: 180, text: "Payment Reconciliation & Settlement" },
+  ]}})
+  // → { h, cells: [{ w, h, contentH }, …] }
+  ```
+
+  All five skill recipes now use it for their sibling rows — flowchart
+  branches, items in an architecture tier, milestone cards, actor headers, and
+  every paired cell in a comparison.
+
+- **`readableOn(color, bg)`** — returns the accent color when it clears the
+  3:1 contrast floor on that background, and a legible ink color when it
+  doesn't. Exported alongside `contrastText`.
+
+- **`examples/comparison-figures.mjs`** — the comparison recipe's three worked
+  examples as runnable code (row cards, single panel, and an asymmetric split),
+  so the layout rules can be read as working code rather than prose.
+
+### Fixed
+
+- **The CLI now reports quality warnings.** `excalidrawer render` computed the
+  geometry lint and then printed only the written paths, so overflowing text
+  and overlapping shapes were silently shipped; `excalidrawer generate` never
+  ran the lint at all. Both now print `⚠ N quality warning(s)` to stderr (stdout
+  is unchanged, so existing pipelines keep working). This is the same gate the
+  MCP `render_diagram` tool has always returned in its result.
+
+- **Architecture template: washed-out section labels.** Yellow and orange tier
+  labels sat at ~2:1 contrast against their own background tint — below the
+  legibility floor the linter enforces. Those two now render in ink; every
+  other tier keeps its accent color.
+
+- **Architecture template: `.excalidraw` and the rendered image disagreed.**
+  Section labels were written with `textAlign: "left"`, which the exporter
+  ignores (it centers all text), so opening the file in Excalidraw showed a
+  left-aligned label where the exported SVG/PNG showed a centered one. The
+  file now matches what we render; exported images are unchanged.
+
+## 0.5.12
+
+_engine 0.5.12 · plugin 0.0.3_
+
+### Changed
+
+- **`box()` / `diamondBox()` are now correct by construction.** They wrap the
+  label to the box's inner width and grow the box height to contain it (only
+  when needed — a short label in a roomy box is untouched), so bound text no
+  longer spills out the bottom or sides. Previously only the sugar path did this;
+  the raw primitives (used by templates and library callers) placed text at the
+  container's fixed size and relied on the renderer, so a long label overflowed.
+  `h` is now a floor, not a fixed height — callers that positioned elements
+  directly below a `box()` assuming a fixed height may need to read the returned
+  rect height.
+- The wrap-and-grow logic is extracted into a single source of truth,
+  `fitBoundText(text, boxW, boxH, fontSize) → { text, height }` (exported from
+  the package root), shared by `box`/`diamondBox` and the sugar path. Layer A's
+  `TEXT_OVERFLOW_X` lint now only fires on the true residual: an unbreakable
+  token (long URL/word) wider than a fixed box, or hand-authored raw elements.
+
+### Version alignment
+
+- Plugin manifests bumped and unified to **0.0.3** across `.claude-plugin`,
+  `.cursor-plugin`, and `.codex-plugin` (cursor/codex had drifted at 0.0.1) —
+  they bundle `skills/`, whose §7.5 quality gate changed in 0.5.11.
+- The MCP dependency pin (`.claude-plugin/plugin.json`) and the SKILL.md CLI
+  fallback commands are lifted to `excalidrawer@^0.5.11` — the floor where the
+  `warnings` field the §7.5 gate depends on first appears.
+
+## 0.5.11
+
+### Added
+
+- **Deterministic quality linter (`validate`)** — a geometry safety net that runs
+  automatically on every `render` / `render_diagram` success and returns a
+  non-fatal `warnings` array (only when something is wrong). Catches the defects
+  that repeatedly make AI-generated diagrams look wrong:
+  - `TEXT_OVERFLOW_X` / `TEXT_OVERFLOW_Y` — a label wider/taller than its box
+    (the root cause of "text not centered": it centers but spills past the border).
+  - `SHAPE_OVERLAP` — two shapes partially overlap (full containment / nesting is
+    left alone as intentional).
+  - `ARROW_CROSSES_SHAPE` — a node-to-node connector runs through a module it
+    doesn't connect ("line over a module"). Backbone lines (timeline axis,
+    sequence lifelines) are excluded — only arrows anchored to a shape at both
+    ends are checked.
+  - `LOW_CONTRAST` — label vs fill contrast below WCAG 3:1 (unreadable label),
+    via relative-luminance math.
+  - `DEGENERATE_ARROW` — an arrow with < 2 real points or start ≈ end.
+
+  Each warning is `{ code, ids, message }` with an actionable fix. Exported as
+  `validate(elements)` for library use. All four built-in templates lint clean.
+- **Two-layer skill quality gate** — `skills/shared/SKILL.md` §7.5 codifies that a
+  diagram is done only when BOTH pass: Layer A (resolve every lint `warning`) and
+  Layer B (a required visual self-check — `Read` the PNG and score it PASS/FAIL
+  against an explicit rubric, loop until clean). Layer B runs at the skill/agent
+  layer using the model's own vision; the package stays deterministic and
+  LLM-free.
+
+## 0.5.10
+
+### Added
+
+- **`fitContainer` and `titledBox` layout helpers** (exposed via `compute_layout`).
+  Both are pure coordinate math, consistent with the other layout helpers.
+  - `fitContainer({ children, padding?, minW?, minH? })` → `{x,y,w,h}` sizes a
+    container to wrap already-placed children with **equal padding on all four
+    sides, including the bottom** — the edge most often left flush against the
+    content or floating in a loose gap when a container height was hand-authored.
+  - `titledBox({ x, y, w, title, body?, titleFontSize?, bodyFontSize?, padding?, gap? })`
+    → `{ box, title, body }` geometry for a header line over a body block (e.g. a
+    bullet list) inside one auto-sized rect, with the header and body free to use
+    different font sizes (the case a single bound-text box can't express). Render
+    `rect(box)` first, then the two `textEl`s on top.
+  - The flowchart and architecture recipes now point to these helpers instead of
+    hand-sizing content boxes.
+
+## 0.5.9
+
+### Added
+
+- **`textColor` on shape sugar** — a `textColor` field (palette key or
+  `#rrggbb`) colors a shape's label. Before this, `stroke` only reached the
+  shape border, so bound text always rendered the default ink (`#1e1e1e`) and
+  the only way to color a label was to hand-author a raw text element. Now
+  `textColor` applies to both a standalone `text` shape and the bound text of a
+  rect / diamond / ellipse; `stroke` still controls the border independently.
+  Unknown values raise a `SugarError` like other color fields.
+
+### Fixed
+
+- **Bound text no longer overflows its box.** The SVG renderer (`renderBoundText`)
+  splits bound text only on existing `\n` and never re-wraps to the container,
+  so a label longer than its box rendered as one centered line spilling out
+  both sides (and tall text spilled below). Only the template generators
+  pre-wrapped; hand-composed sugar got raw text. The sugar path now wraps bound
+  text to the box's inner width and grows the box height (and its bbox, so
+  arrows stay anchored) to contain the vertically-centered lines — growing only
+  when the text needs the room; short labels in roomy boxes are untouched.
+
+### Tests
+
+- `tests/sugar.test.mjs`: `textColor` (bound text, standalone text, palette key,
+  unknown value) and bound-text wrapping + height-growth + untouched-short-label.
+
+## 0.5.8
+
+### Added
+
+- **Automatic CJK font support** (`autoRegisterCjkFont` in `src/export.mjs`).
+  When element text contains Chinese / Japanese / Korean characters,
+  `render()` discovers the first available system CJK font (PingFang on
+  macOS, Noto Sans CJK / WenQuanYi on Linux, Microsoft YaHei / SimSun on
+  Windows) and registers it with `resvg-js` so PNG output renders CJK
+  glyphs instead of empty boxes. Latin-only diagrams pay nothing.
+- SVG output extends its `font-family` chain with common CJK family names
+  (`PingFang SC`, `Hiragino Sans`, `Noto Sans CJK SC`, `Microsoft YaHei`,
+  ...) so the viewer's locally installed CJK font picks up the glyphs —
+  without bloating the SVG with a multi-MB embedded font.
+- `autoRegisterCjkFont` re-exported from the package root. Library users
+  calling `toSvg`/`toPng` directly can invoke it themselves.
+- Tests: `tests/cjk.test.mjs`.
+
+### Notes
+
+- Auto-loaded CJK fonts are **not** embedded in SVG (a full PingFang.ttc
+  is ~25 MB). For fully portable SVG (renders on systems without CJK
+  fonts), call `registerFonts(["/path/to/font.ttc"])` manually — that
+  path is embedded as a `@font-face` data URL.
+
+## 0.5.7
+
+### Added
+
+- **Sugar shorthand** (`src/sugar.mjs`) — terse `{ shape, at, size, fill, ... }`
+  objects translate into full raw Excalidraw elements. Shapes auto-expand to a
+  bound `[shape, text]` pair when `text` is non-empty. Arrow sugar has four
+  forms:
+  - L1 `{ from, to }` — auto sides + auto orthogonal route
+  - L2 `{ from, to, fromSide, toSide, fromT?, toT? }` — pinned sides + sliding
+    edge anchors
+  - L3 `{ from, to, via, clearance? }` — U-route detour (`above` / `below` /
+    `left` / `right`)
+  - L4 `{ at, points }` — manual escape
+- **Auto orthogonal routing** (`autoSides` + `orthoPath`) — pick sides by axis
+  disjointness (vertical separation wins ties), then build a straight / L-bend
+  / Z-route depending on whether the chosen sides are aligned, perpendicular,
+  or parallel-with-offset. Never a bare diagonal.
+- **Arrow style options** — `dashed`, `head:"arrow"|"none"`, `labelT` (0–1
+  position of the auto-label along the path).
+- **Raw passthrough normalizes** — partial raw elements get missing base fields
+  (`opacity`, `strokeColor`, `groupIds`, ...) filled in by `base()`. Closes the
+  silent "`opacity=NaN`" trap where a partially-specified raw element rendered
+  as garbage.
+- **`render(elements)` runs `desugar` before validation** — sugar and raw can
+  freely mix in the same array.
+- `desugar` and `SugarError` (with `.issues`) re-exported from the package root.
+- Tests: `tests/sugar.test.mjs` (88 tests total, all green).
+
+### Changed
+
+- `generate -t <type>` now emits a **deprecation warning** to stderr — the
+  command still works but will be removed in 0.6.0. Migrate to `render` with
+  sugar or raw elements.
+- `render_diagram` MCP/CLI tool description now documents the sugar schema.
+
+### Notes
+
+- Additive on the npm package side. `lib` (`src/index.mjs`) stays physically
+  importable; CLI + MCP remain the supported public surface.
+- The harold-skills plugin migration to *clarify → recipe → sugar → render* is
+  tracked separately; plugin versioning decouples from the npm version from
+  here on.
+
+## 0.5.6
+
+### Added
+
+- **Shared tool registry** (`src/tools/`) — single source of truth feeding both
+  public surfaces. Each tool is declared once with `defineTool`; the CLI and MCP
+  server generate their interfaces from it, so they never drift.
+  - `render_diagram` — render raw Excalidraw elements to files
+  - `compute_layout` — dispatch the layout helpers (single tool, `helper` +
+    flat `args`)
+- **`render(elements, opts)`** (`src/render.mjs`) — the dumb serializer. Flattens
+  + validates minimum element shape (`id` / `type`, no dupes), emits the
+  requested formats. No "diagram kind" concept. Throws `ElementValidationError`
+  with a per-index `issues` list on bad input.
+- **`excalidrawer-mcp` MCP server** (`src/mcp.mjs`) — stdio transport, new `bin`.
+  A thin protocol adapter over the shared registry; built on
+  `@modelcontextprotocol/sdk`.
+- **CLI `render` and `compute-layout` subcommands** — registry-backed, share the
+  same tool `run` as the MCP server.
+- Tests: `tests/render.test.mjs`, `tests/tools.test.mjs`.
+
+### Notes
+
+- Additive. `generate -t <type>` and `src/templates/` are untouched; existing
+  skills on `@^0.5.4` need no update. `lib` (`src/index.mjs`) stays physically
+  importable but, from this version on, the *supported* surface is CLI + MCP.
+
+## 0.5.5
+
+### Added
+
+- **Layout helpers** (`src/layout.mjs`) — pure coordinate math, composable with
+  the element factories:
+  - `gridLayout(count, opts)` — regular grid positions
+  - `chain(startXY, count, opts)` — evenly-spaced linear point sequence
+  - `swimlane(lanes, items, opts)` — horizontal swimlane bands + item positions
+  - `hubSpoke(centerXY, count, opts)` — radial hub-and-spoke positions
+  - `edgePoint(target, side, t?)` — shape-aware edge attachment points
+    (rectangle / diamond / ellipse)
+  - `routeU(fromXY, toXY, opts)` — U-shaped detour path for back-edges / loops
+  - `labelAnchor(absPoints, opts)` — pick a non-crossing label position on a path
+  - `contrastText(hex)` — WCAG-AA black/white text color for a given fill
+  - `triplet(key)` — resolve a color key to its `{ bg, mid, stroke }` tones
+- Palette gaps filled: `bgOrange`, `bgGray`, `strokeRed`.
+- `node:test` test suite (`tests/layout.test.mjs`); `npm test` now runs it.
+- Helper visual demo (`examples/layout-helpers-demo.mjs`).
+
+### Changed
+
+- `swimlane` default `laneGap` is now `24` (was `0`) for clearer lane separation.
+
+### Notes
+
+- Fully additive. Templates and the `generate -t` CLI flag are unchanged;
+  existing skills on `@^0.5.4` need no update.
